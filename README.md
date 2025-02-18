@@ -11,6 +11,12 @@ Collaborative Code Editor - это веб-платформа для совмес
 - Система управления доступом к комнатам
 - Голосование для компиляции кода
 
+## Демонстрация
+<!-- Для локального видео -->
+<video width="100%" autoplay loop muted playsinline>
+  <source src="./docs/demo.mp4" type="video/mp4">
+</video>
+
 ## Технологии
 
 - **Frontend:** Next.js, React
