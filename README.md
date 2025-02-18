@@ -12,10 +12,8 @@ Collaborative Code Editor - это веб-платформа для совмес
 - Голосование для компиляции кода
 
 ## Демонстрация
-<!-- Для локального видео -->
-<video width="100%" autoplay loop muted playsinline>
-  <source src="./docs/demo.mp4" type="video/mp4">
-</video>
+https://github.com/user-attachments/assets/8e97322c-8a8f-4532-bfa8-ef052e56a351
+
 
 ## Технологии
 
