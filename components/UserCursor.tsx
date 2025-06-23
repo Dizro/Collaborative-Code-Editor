@@ -12,9 +12,8 @@ export default function UserCursor({ x, y, username, color }: UserCursorProps) {
     <div
       className="absolute pointer-events-none"
       style={{
-        left: x,
-        top: y,
-        transform: "translate(-50%, -50%)",
+        transform: `translate(${x}px, ${y}px)`,
+        transition: 'transform 0.1s linear',
       }}
     >
       <svg
@@ -25,6 +24,7 @@ export default function UserCursor({ x, y, username, color }: UserCursorProps) {
         xmlns="http://www.w3.org/2000/svg"
         style={{
           filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
+          transform: 'translateY(-2px)'
         }}
       >
         <path
@@ -40,6 +40,7 @@ export default function UserCursor({ x, y, username, color }: UserCursorProps) {
         style={{
           backgroundColor: color,
           boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+          transform: 'translateY(18px)'
         }}
       >
         {username}

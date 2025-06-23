@@ -1,12 +1,12 @@
 // Хук для управления цветами пользователей
 import { useMemo } from 'react';
 import type { User, BaseUserMeta } from '@liveblocks/client';
-import type { Presence } from '@/liveblocks/client';
+import type { Presence } from '@/liveblocks.config';
 
 // Набор предопределенных цветов для пользователей
 const COLORS = [
  "#FF0000", // Красный
- "#4CAF50", // Зеленый 
+ "#4CAF50", // Зеленый
  "#2196F3", // Синий
  "#FFC107", // Желтый
  "#9C27B0", // Пурпурный
@@ -24,7 +24,7 @@ export function useUserColors(
  return useMemo(() => {
    // Создаем Map для хранения цветов пользователей
    const userColors = new Map<number, string>();
-   
+
    // Назначаем цвета пользователям
    users.forEach((user) => {
      // Если у пользователя еще нет цвета
@@ -36,7 +36,7 @@ export function useUserColors(
        );
      }
    });
-   
+
    return userColors;
  }, [users]); // только при изменении списка пользователей - пересчёт
 }

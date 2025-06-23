@@ -42,12 +42,12 @@ export default function CreateRoomDialog({}: Props) {
   };
 
   return (
-    <div className="bg-white p-8 rounded-2xl shadow-lg w-[520px] border border-gray-100">
+    <div className="bg-background p-8 rounded-2xl shadow-lg w-full max-w-lg border border-border">
       <div className="mb-8">
-        <h2 className="text-2xl font-medium text-[#323C46] mb-2">
+        <h2 className="text-2xl font-medium text-foreground mb-2">
           Создание комнаты
         </h2>
-        <p className="text-[#686B75]">
+        <p className="text-foreground-secondary">
           Настройте параметры комнаты для совместной работы
         </p>
       </div>
@@ -56,7 +56,7 @@ export default function CreateRoomDialog({}: Props) {
         {/* Основные настройки */}
         <div className="space-y-4">
           <div>
-            <label className="block text-[#686B75] text-sm font-medium mb-2">
+            <label className="block text-foreground-secondary text-sm font-medium mb-2">
               Название комнаты
             </label>
             <input
@@ -65,15 +65,15 @@ export default function CreateRoomDialog({}: Props) {
               onChange={(e) =>
                 setSettings({ ...settings, roomName: e.target.value })
               }
-              className="w-full p-3.5 bg-white text-[#393B3A] border border-[#9197A0] rounded-xl 
-                focus:border-[#323C46] focus:ring-1 focus:ring-[#323C46] transition-colors duration-200 
-                outline-none placeholder:text-[#9197A0]"
+              className="w-full p-3.5 bg-background text-foreground border border-border rounded-xl
+                focus:border-primary focus:ring-1 focus:ring-ring-color transition-colors duration-200
+                outline-none placeholder:text-foreground-secondary"
               placeholder="Введите название комнаты"
             />
           </div>
 
           <div>
-            <label className="block text-[#686B75] text-sm font-medium mb-2">
+            <label className="block text-foreground-secondary text-sm font-medium mb-2">
               Максимум участников
             </label>
             <input
@@ -84,11 +84,11 @@ export default function CreateRoomDialog({}: Props) {
               onChange={(e) =>
                 setSettings({ ...settings, maxUsers: parseInt(e.target.value) })
               }
-              className="w-full p-3.5 bg-white text-[#393B3A] border border-[#9197A0] rounded-xl 
-                focus:border-[#323C46] focus:ring-1 focus:ring-[#323C46] transition-colors duration-200 
+              className="w-full p-3.5 bg-background text-foreground border border-border rounded-xl
+                focus:border-primary focus:ring-1 focus:ring-ring-color transition-colors duration-200
                 outline-none"
             />
-            <p className="mt-2 text-sm text-[#9197A0]">
+            <p className="mt-2 text-sm text-foreground-secondary">
               Рекомендуемое количество: 2-10 человек
             </p>
           </div>
@@ -96,11 +96,11 @@ export default function CreateRoomDialog({}: Props) {
 
         {/* Настройки доступа */}
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-[#323C46] mb-4">
+          <h3 className="text-lg font-medium text-foreground mb-4">
             Настройки доступа
           </h3>
 
-          <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-[#323C46] transition-colors duration-200 cursor-pointer">
+          <div className="p-4 bg-background-secondary rounded-xl border border-border hover:border-primary/50 transition-colors duration-200 cursor-pointer">
             <label className="flex items-start space-x-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -108,13 +108,13 @@ export default function CreateRoomDialog({}: Props) {
                 onChange={(e) =>
                   setSettings({ ...settings, enableFileTree: e.target.checked })
                 }
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-[#323C46] focus:ring-[#323C46]"
+                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring-color"
               />
               <div>
-                <span className="block text-[#393B3A] font-medium">
+                <span className="block text-foreground font-medium">
                   Файловое дерево
                 </span>
-                <span className="block text-sm text-[#9197A0] mt-1">
+                <span className="block text-sm text-foreground-secondary mt-1">
                   Показывать структуру файлов проекта
                 </span>
               </div>
@@ -122,7 +122,7 @@ export default function CreateRoomDialog({}: Props) {
           </div>
 
           <div>
-            <label className="block text-[#686B75] text-sm font-medium mb-2">
+            <label className="block text-foreground-secondary text-sm font-medium mb-2">
               Метод авторизации
             </label>
             <select
@@ -133,8 +133,8 @@ export default function CreateRoomDialog({}: Props) {
                   authMethod: e.target.value as RoomSettings["authMethod"],
                 })
               }
-              className="w-full p-3.5 bg-white text-[#393B3A] border border-[#9197A0] rounded-xl 
-                focus:border-[#323C46] focus:ring-1 focus:ring-[#323C46] transition-colors duration-200 
+              className="w-full p-3.5 bg-background text-foreground border border-border rounded-xl
+                focus:border-primary focus:ring-1 focus:ring-ring-color transition-colors duration-200
                 outline-none appearance-none cursor-pointer"
             >
               <option value="all">Все методы</option>
@@ -147,12 +147,12 @@ export default function CreateRoomDialog({}: Props) {
 
         {/* Настройки коммуникации */}
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-[#323C46] mb-4">
+          <h3 className="text-lg font-medium text-foreground mb-4">
             Настройки общения
           </h3>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-[#323C46] transition-colors duration-200 cursor-pointer">
+            <div className="p-4 bg-background-secondary rounded-xl border border-border hover:border-primary/50 transition-colors duration-200 cursor-pointer">
               <label className="flex items-start space-x-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -166,20 +166,20 @@ export default function CreateRoomDialog({}: Props) {
                       },
                     })
                   }
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-[#323C46] focus:ring-[#323C46]"
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring-color"
                 />
                 <div>
-                  <span className="block text-[#393B3A] font-medium">
+                  <span className="block text-foreground font-medium">
                     Текстовый чат
                   </span>
-                  <span className="block text-sm text-[#9197A0] mt-1">
+                  <span className="block text-sm text-foreground-secondary mt-1">
                     Общение через сообщения
                   </span>
                 </div>
               </label>
             </div>
 
-            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-[#323C46] transition-colors duration-200 cursor-pointer">
+            <div className="p-4 bg-background-secondary rounded-xl border border-border hover:border-primary/50 transition-colors duration-200 cursor-pointer">
               <label className="flex items-start space-x-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -193,13 +193,13 @@ export default function CreateRoomDialog({}: Props) {
                       },
                     })
                   }
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-[#323C46] focus:ring-[#323C46]"
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring-color"
                 />
                 <div>
-                  <span className="block text-[#393B3A] font-medium">
+                  <span className="block text-foreground font-medium">
                     Голосовой чат
                   </span>
-                  <span className="block text-sm text-[#9197A0] mt-1">
+                  <span className="block text-sm text-foreground-secondary mt-1">
                     Общение через микрофон
                   </span>
                 </div>
@@ -211,8 +211,8 @@ export default function CreateRoomDialog({}: Props) {
         <button
           onClick={handleCreateRoom}
           disabled={!settings.roomName}
-          className="w-full p-3.5 bg-[#323C46] text-white rounded-xl 
-            hover:bg-[#404a56] transition-colors duration-200 
+          className="w-full p-3.5 bg-primary text-primary-foreground rounded-xl
+            hover:bg-primary/90 transition-colors duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
             font-medium text-sm"
         >

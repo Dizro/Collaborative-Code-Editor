@@ -73,4 +73,4 @@ export function Avatar({
       {name.charAt(0)}
     </div>
   );
-} 
+}

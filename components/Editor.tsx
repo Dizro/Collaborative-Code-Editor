@@ -1,5 +1,4 @@
-// components/Editor.tsx
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import { Editor as MonacoEditor, OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import {
@@ -7,361 +6,303 @@ import {
   useOthers,
   useStorage,
   useMutation,
-  useEventListener,
-} from "@/liveblocks/client";
-import type { Reaction, StorageFile } from "@/types/room";
+} from "@/liveblocks.config";
+import type { StorageFile } from "@/types/room";
 import { LiveMap } from "@liveblocks/client";
 import FileTree from "./FileTree";
-import CompilationControl from "./room/CompilationControl";
-import { UserSelection, UserCursor } from "./UserSelection";
+import UserCursor from "./UserCursor";
+import { useTheme } from "@/contexts/ThemeContext";
+import AIAssistant from "./AIAssistant";
+import { useUserColors } from "@/hooks/useUserColors";
+import { debounce } from 'lodash';
+import { FiMenu, FiX } from "react-icons/fi";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface EditorProps {
   username: string;
   roomId: string;
 }
 
-const SUPPORTED_LANGUAGES = [
-  { id: "typescript", name: "TypeScript", extensions: [".ts", ".tsx"] },
-  { id: "javascript", name: "JavaScript", extensions: [".js", ".jsx"] },
-  { id: "python", name: "Python", extensions: [".py"] },
-  { id: "html", name: "HTML", extensions: [".html", ".htm"] },
-  { id: "css", name: "CSS", extensions: [".css"] },
-  { id: "json", name: "JSON", extensions: [".json"] },
-  { id: "markdown", name: "Markdown", extensions: [".md"] },
-];
+const getFileLanguage = (filename: string | null): string => {
+    if (!filename) return 'plaintext';
+    const ext = filename.split(".").pop() || "";
+    const langMap: Record<string, string> = {
+        ts: "typescript", tsx: "typescript",
+        js: "javascript", jsx: "javascript",
+        py: "python", html: "html", css: "css",
+        json: "json", md: "markdown",
+    };
+    return langMap[ext] || "plaintext";
+};
 
-const COLORS = [
-  "#ff0000",
-  "#00ff00",
-  "#0000ff",
-  "#ff00ff",
-  "#ffff00",
-  "#00ffff",
-];
-
-export default function Editor({ username }: EditorProps) {
-  // Presence and storage hooks
+export default function Editor({ username, roomId }: EditorProps) {
   const [{ selectedFile }, updateMyPresence] = useMyPresence();
   const others = useOthers();
-  const files = useStorage((root) => root.files);
-  const roomSettings = useStorage((root) => root.roomSettings) as {
-    isPrivate: boolean;
-    enableVoiceChat: boolean;
-    enableTextChat: boolean;
-    requireVoteForCompilation: boolean;
-  };
+  const files = useStorage(root => root.files);
+  const { theme } = useTheme();
 
-  // Refs
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Состояние для мобильного сайдбара
+
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const monacoRef = useRef<typeof import("monaco-editor")>(null);
-  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
+  const decorationsRef = useRef<string[]>([]);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isApplyingRemoteChange = useRef(false);
 
-  // State
-  const [, setReactions] = useState<Reaction[]>([]);
-  const [sidebarWidth] = useState(280);
-  const [] = useState<"vs-dark" | "light">("vs-dark");
-  const [fontSize] = useState(14);
-  const [showMinimap] = useState(false);
-  const [] = useState<number | undefined>();
+  const userColors = useUserColors(others);
 
-  // Handlers
+  const currentFileContent = selectedFile ? files?.get(selectedFile)?.content : null;
 
-  // Event listeners
-  useEventListener(({ event }) => {
-    if (
-      event &&
-      typeof event === "object" &&
-      "type" in event &&
-      event.type === "reaction"
-    ) {
-      const { id, x, y, emoji, timestamp, lineNumber } = event;
-      if (
-        typeof id === "string" &&
-        typeof x === "number" &&
-        typeof y === "number" &&
-        typeof emoji === "string" &&
-        typeof timestamp === "number"
-      ) {
-        const newReaction: Reaction = {
-          id,
-          x,
-          y,
-          emoji,
-          username,
-          timestamp,
-          lineNumber: typeof lineNumber === "number" ? lineNumber : undefined,
-        };
-        setReactions((prev) => [...prev, newReaction]);
-      }
-    }
-  });
-
-  // Cleanup reactions
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setReactions((reactions) =>
-        reactions.filter((reaction) => reaction.timestamp > Date.now() - 4000)
-      );
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Utility functions
-  const getFileLanguage = useCallback((filename: string): string => {
-    const ext = filename.split(".").pop() || "";
-    const lang = SUPPORTED_LANGUAGES.find((l) =>
-      l.extensions.some((e) => e.substring(1) === ext)
-    );
-    return lang?.id || "plaintext";
-  }, []);
-
-  const getFileInfo = useCallback(
-    (path: string): StorageFile | null => {
-      return files?.get(path) || null;
-    },
-    [files]
-  );
-
-  // Обновляем содержимое редактора при изменениях
-  useEffect(() => {
-    if (!selectedFile || !files || !editorRef.current) return;
-
-    const currentFile = files.get(selectedFile);
-    if (!currentFile) return;
-
-    const model = editorRef.current.getModel();
-    if (!model) return;
-
-    const currentContent = model.getValue();
-    if (currentContent !== currentFile.content) {
-      const position = editorRef.current.getPosition();
-      editorRef.current.setValue(currentFile.content);
-      if (position) {
-        editorRef.current.setPosition(position);
-      }
-    }
-  }, [selectedFile, files]);
-
-  // Обработчик изменений в редакторе
   const handleEditorChange = useMutation(
     ({ storage }, value: string) => {
+      if (isApplyingRemoteChange.current) return;
+
+      updateMyPresence({ isTyping: true });
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => updateMyPresence({ isTyping: false }), 1000);
+
       if (!selectedFile) return;
-      const files = storage.get("files") as LiveMap<string, StorageFile>;
-      if (!files) return;
-
-      files.set(selectedFile, {
-        content: value,
-        type: "file",
-        language: getFileLanguage(selectedFile),
-        lastEditedBy: username,
-        lastEditedAt: Date.now(),
-      });
-    },
-    [selectedFile, username, getFileLanguage]
-  );
-
-  const handleCursorMove = useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault();
-      if (!editorContainerRef.current || !editorRef.current) return;
-
-      const rect = editorContainerRef.current.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      updateMyPresence({
-        cursor: {
-          x,
-          y,
-          lineNumber: editorRef.current.getPosition()?.lineNumber || 0,
-          column: editorRef.current.getPosition()?.column || 0,
-        },
-      });
-    },
-    [updateMyPresence]
-  );
-
-  // Также добавим обработчик клика для обновления позиции курсора
-  const handleEditorClick = useCallback(
-    (event: React.MouseEvent) => {
-      handleCursorMove(event);
-    },
-    [handleCursorMove]
-  );
-
-  const handleCursorChange = useCallback(
-    (e: editor.ICursorPositionChangedEvent) => {
-      if (editorRef.current) {
-        const position = e.position;
-        if (position) {
-          const coordinates =
-            editorRef.current.getScrolledVisiblePosition(position);
-          updateMyPresence({
-            cursor: {
-              x: coordinates?.left || 0,
-              y: coordinates?.top || 0,
-              lineNumber: position.lineNumber,
-              column: position.column,
-            },
-          });
-        }
+      const currentFiles = storage.get("files") as LiveMap<string, StorageFile>;
+      const file = currentFiles.get(selectedFile);
+      if (file) {
+        currentFiles.set(selectedFile, { ...file, content: value, lastEditedBy: username, lastEditedAt: Date.now() });
       }
     },
-    [updateMyPresence]
+    [selectedFile, username, updateMyPresence]
   );
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    editor.onDidChangeCursorPosition(handleCursorChange);
-
-    editor.onDidChangeCursorSelection(() => {
-      const selection = editor.getSelection();
-      if (selection) {
+    editor.onDidChangeCursorPosition(e => {
+        const position = e.position;
         updateMyPresence({
-          selection: {
-            start: selection.startColumn,
-            end: selection.endColumn,
-            lineNumber: selection.startLineNumber,
-          },
+            cursor: {
+                lineNumber: position.lineNumber,
+                column: position.column,
+            }
         });
-      }
     });
+
+    editor.onDidChangeCursorSelection(e => {
+        const selection = e.selection;
+        updateMyPresence({
+            selection: {
+                startLineNumber: selection.startLineNumber,
+                startColumn: selection.startColumn,
+                endLineNumber: selection.endLineNumber,
+                endColumn: selection.endColumn,
+            }
+        });
+    });
+
+    const editorElement = editor.getDomNode();
+    if (editorElement) {
+        editorElement.addEventListener('mouseleave', () => {
+            updateMyPresence({ cursor: null });
+        });
+    }
   };
 
   useEffect(() => {
-    if (editorRef.current) {
-      const disposable =
-        editorRef.current.onDidChangeCursorPosition(handleCursorChange);
-      return () => {
-        disposable.dispose();
-      };
+    const editor = editorRef.current;
+    if (!editor || currentFileContent === null || currentFileContent === undefined) return;
+
+    const model = editor.getModel();
+    if (model && model.getValue() !== currentFileContent) {
+        isApplyingRemoteChange.current = true;
+        const currentPosition = editor.getPosition();
+        editor.executeEdits("liveblocks-sync", [{
+            range: model.getFullModelRange(),
+            text: currentFileContent
+        }]);
+        if (currentPosition) editor.setPosition(currentPosition);
+        isApplyingRemoteChange.current = false;
     }
-  }, [handleCursorChange]);
+  }, [currentFileContent]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) return;
+
+    const newDecorations: editor.IModelDeltaDecoration[] = [];
+
+    others.forEach(user => {
+      const userColor = userColors.get(user.connectionId);
+      if (user.presence?.selection && user.presence.selectedFile === selectedFile && userColor) {
+        const selection = user.presence.selection;
+        const isSelectionEmpty =
+            selection.startLineNumber === selection.endLineNumber &&
+            selection.startColumn === selection.endColumn;
+
+        const selectionClassName = `user-selection user-selection-color-${user.connectionId}`;
+        newDecorations.push({
+          range: new monaco.Range(
+            selection.startLineNumber,
+            selection.startColumn,
+            selection.endLineNumber,
+            selection.endColumn
+          ),
+          options: {
+            className: selectionClassName,
+            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          },
+        });
+
+        if (!isSelectionEmpty) {
+            const nameTagClassName = `user-nametag user-nametag-color-${user.connectionId}`;
+            newDecorations.push({
+                range: new monaco.Range(selection.endLineNumber, selection.endColumn, selection.endLineNumber, selection.endColumn),
+                options: {
+                    after: { content: `\u200B${user.presence.username}` },
+                    className: nameTagClassName,
+                }
+            });
+        }
+      }
+    });
+
+    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, newDecorations);
+
+  }, [others, selectedFile, userColors]);
+
+  useEffect(() => {
+    const styleId = 'dynamic-user-styles';
+    let styleElement = document.getElementById(styleId) as HTMLStyleElement;
+    if (!styleElement) {
+        styleElement = document.createElement('style');
+        styleElement.id = styleId;
+        document.head.appendChild(styleElement);
+    }
+
+    let newCssRules = '';
+    userColors.forEach((color, connectionId) => {
+        newCssRules += `
+          .user-selection-color-${connectionId} { background-color: ${color}33; }
+          .user-nametag-color-${connectionId}::after {
+            background-color: ${color};
+            color: white;
+            padding: 1px 4px;
+            border-radius: 3px;
+            margin-left: 6px;
+            font-size: 12px;
+          }
+        `;
+    });
+    styleElement.innerHTML = newCssRules;
+  }, [userColors]);
+
+  const monacoTheme = theme === 'light' ? 'vs' : (theme === 'dark' ? 'vs-dark' : 'ocean-theme');
+
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    if (monaco) {
+        monaco.editor.defineTheme('ocean-theme', {
+            base: 'vs-dark', inherit: true, rules: [],
+            colors: {
+                'editor.background': '#0F172A', 'editor.foreground': '#E2E8F0',
+                'editorCursor.foreground': '#38BDF8', 'editor.lineHighlightBackground': '#1E293B',
+                'editorLineNumber.foreground': '#475569', 'editor.selectionBackground': '#334155',
+            },
+        });
+    }
+  }, [monacoRef.current]);
 
   return (
-    <div className="flex h-screen bg-white text-[#686B75] overflow-hidden">
-      {/* Sidebar */}
-      <div
-        style={{ width: sidebarWidth }}
-        className="bg-gray-50 border-r border-gray-100 flex flex-col"
-      >
-        <FileTree
-          onSelect={(path) => updateMyPresence({ selectedFile: path })}
-          currentFile={selectedFile}
-          username={username}
-        />
+    <div className="flex h-full bg-background text-foreground-secondary overflow-hidden">
+      {/* --- Мобильный сайдбар --- */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+            <>
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+                <motion.div
+                    initial={{ x: "-100%" }}
+                    animate={{ x: 0 }}
+                    exit={{ x: "-100%" }}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    className="fixed top-0 left-0 h-full w-72 z-50 lg:hidden"
+                >
+                    <FileTree onSelect={(path) => { updateMyPresence({ selectedFile: path, selection: null, cursor: null }); setIsSidebarOpen(false); }} currentFile={selectedFile} username={username} />
+                </motion.div>
+            </>
+        )}
+      </AnimatePresence>
+
+      {/* --- Десктопный сайдбар --- */}
+      <div className="hidden lg:block w-72 bg-background-secondary border-r border-border flex-shrink-0">
+        <FileTree onSelect={(path) => updateMyPresence({ selectedFile: path, selection: null, cursor: null })} currentFile={selectedFile} username={username} />
       </div>
 
-      {/* Editor area */}
       <div className="flex-1 flex flex-col relative">
-        {/* Toolbar */}
-        <div className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6">
-          <div className="flex items-center space-x-4">
+        <div className="h-14 bg-background border-b border-border flex items-center justify-between px-4 lg:px-6">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-foreground-secondary hover:bg-background-secondary rounded-md lg:hidden">
+                <FiMenu size={20} />
+            </button>
             {selectedFile && (
               <>
-                <span className="text-[#323C46] font-medium">
-                  {selectedFile}
+                <span className="text-foreground font-medium">{selectedFile}</span>
+                <span className="text-foreground-secondary text-sm hidden sm:inline">
+                  {others.some(u => u.presence.selectedFile === selectedFile && u.presence.isTyping) ? 'печатает...' : ''}
                 </span>
-                {getFileInfo(selectedFile)?.lastEditedBy && (
-                  <span className="text-[#9197A0] text-sm">
-                    Последнее изменение:{" "}
-                    {getFileInfo(selectedFile)?.lastEditedBy}
-                  </span>
-                )}
               </>
             )}
           </div>
         </div>
-
-        {/* Editor container */}
-        <div
-          ref={editorContainerRef}
-          className="flex-1 relative"
-          onMouseMove={handleCursorMove}
-          onClick={handleEditorClick}
-          onMouseLeave={() => updateMyPresence({ cursor: null })}
-        >
+        <div className="flex-1 relative">
           {selectedFile ? (
-            <div className="h-full relative overflow-hidden">
+            <>
               <MonacoEditor
+                key={selectedFile}
                 height="100%"
                 language={getFileLanguage(selectedFile)}
-                value={getFileInfo(selectedFile)?.content || ""}
-                theme="light"
-                onChange={(value) => value && handleEditorChange(value)}
+                value={currentFileContent || ""}
+                theme={monacoTheme}
+                onChange={(value) => handleEditorChange(value || "")}
                 onMount={handleEditorMount}
                 options={{
-                  minimap: { enabled: showMinimap },
-                  fontSize,
-                  lineNumbers: "on",
-                  roundedSelection: false,
-                  occurrencesHighlight: "off",
-                  cursorStyle: "line",
-                  automaticLayout: true,
-                  tabSize: 2,
-                  wordWrap: "on",
-                  scrollBeyondLastLine: false,
-                  smoothScrolling: true,
-                  cursorBlinking: "smooth",
-                  cursorSmoothCaretAnimation: "on",
-                  formatOnPaste: true,
-                  formatOnType: true,
-                  padding: { top: 16, bottom: 16 },
-                  fontFamily: "'JetBrains Mono', monospace",
-                  // Настройки цветов для светлой темы
-                  renderLineHighlight: "all",
-                  lineHeight: 1.6,
+                  minimap: { enabled: false }, fontSize: 14, lineNumbers: "on",
+                  roundedSelection: false, scrollBeyondLastLine: false, automaticLayout: true,
+                  tabSize: 2, wordWrap: "on", cursorSmoothCaretAnimation: "on",
+                  padding: { top: 16, bottom: 16 }, fontFamily: "JetBrains Mono, monospace",
                 }}
-                className="px-4"
               />
-              <div className="absolute inset-0 pointer-events-none">
-                {others.map(({ connectionId, presence, info }) => {
-                  if (!presence || !editorRef.current) return null;
+              <div className="absolute inset-0 pointer-events-none w-full h-full overflow-hidden">
+                {others
+                  .filter(other => other.presence.cursor && other.presence.selectedFile === selectedFile && editorRef.current)
+                  .map(({ connectionId, presence }) => {
+                    const coords = editorRef.current!.getScrolledVisiblePosition(presence.cursor!);
+                    if (!coords) return null;
 
-                  return (
-                    <React.Fragment key={connectionId}>
-                      <UserCursor
-                        user={{ presence, connectionId, info }}
-                        color={COLORS[connectionId % COLORS.length]}
-                        selectedFile={selectedFile}
-                        editor={editorRef.current}
-                      />
-                      <UserSelection
-                        user={{ presence, connectionId, info }}
-                        color={COLORS[connectionId % COLORS.length]}
-                        selectedFile={selectedFile}
-                        editor={editorRef.current}
-                      />
-                    </React.Fragment>
-                  );
-                })}
+                    return (
+                        <UserCursor
+                        key={connectionId}
+                        x={coords.left}
+                        y={coords.top}
+                        username={presence.username}
+                        color={userColors.get(connectionId) || "#000000"}
+                        />
+                    );
+                  })}
               </div>
-            </div>
+              <AIAssistant code={currentFileContent || ""} fileName={selectedFile} />
+            </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full">
-              <div className="text-[#323C46] font-medium mb-2">
-                Выберите файл для редактирования
-              </div>
-              <p className="text-[#9197A0] text-sm">
-                Выберите файл из списка слева, чтобы начать работу
-              </p>
+            <div className="flex flex-col items-center justify-center h-full text-center p-4">
+              <div className="text-foreground font-medium mb-2">Выберите или создайте файл</div>
+              <p className="text-foreground-secondary text-sm">Используйте панель слева, чтобы начать работу.</p>
             </div>
           )}
         </div>
-
-        {roomSettings?.requireVoteForCompilation && (
-          <div className="fixed bottom-6 left-6">
-            <div
-              className="bg-white rounded-xl shadow-sm border border-gray-100 
-              hover:border-[#323C46] transition-colors duration-200"
-            >
-              <CompilationControl requireVote={true} />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

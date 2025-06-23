@@ -2,20 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Светлая тема (по умолчанию) */
+:root, [data-theme='light'] {
+  --background: #ffffff; /* Основной фон */
+  --background-secondary: #f3f4f6; /* Вторичный фон (сайдбары, карточки) */
+  --foreground: #111827; /* Основной текст */
+  --foreground-secondary: #6b7280; /* Вторичный текст (подписи, плейсхолдеры) */
+  --border-color: #e5e7eb; /* Цвет границ */
+  --primary: #2563eb; /* Основной акцентный цвет (кнопки, активные элементы) */
+  --primary-foreground: #ffffff; /* Текст на акцентном цвете */
+  --ring-color: #3b82f6; /* Цвет обводки при фокусе */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Темная тема */
+[data-theme='dark'] {
+  --background: #111827;
+  --background-secondary: #1f2937;
+  --foreground: #f9fafb;
+  --foreground-secondary: #9ca3af;
+  --border-color: #374151;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --ring-color: #60a5fa;
+}
+
+/* Тема "Океан" */
+[data-theme='ocean'] {
+  --background: #0c1427;
+  --background-secondary: #1a2742;
+  --foreground: #e0f2fe;
+  --foreground-secondary: #94a3b8;
+  --border-color: #334155;
+  --primary: #38bdf8;
+  --primary-foreground: #020617;
+  --ring-color: #7dd3fc;
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--background);
+  transition: background-color 0.2s, color 0.2s;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+/* Стили для выделения Monaco Editor */
+.monaco-editor .user-selection {
+  border-radius: 2px;
+  pointer-events: none;
+}
+.monaco-editor .user-nametag::after {
+  position: relative;
+  pointer-events: none;
 }

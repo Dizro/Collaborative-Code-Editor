@@ -1,82 +1,75 @@
-// Клиентский компонент для отображения комнаты с редактором кода
-
-// app\rooms\[roomId]\page.tsx
-
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  RoomProvider,
-  useOthers,
-  useStorage,
-  useMutation,
-} from "@/liveblocks/client";
+import { RoomProvider, useOthers, useStorage, useMutation } from "@/liveblocks.config";
 import { LiveMap, LiveObject } from "@liveblocks/client";
 import Editor from "@/components/Editor";
-import type { StorageFile, UserData } from "@/types/room";
+import type { UserData, RoomSettings, StorageFile } from "@/types/room";
 import Navbar from "@/components/room/Navbar";
 
+// Начальные настройки комнаты
+const defaultRoomSettings: RoomSettings = {
+  roomName: "Default Room",
+  isPrivate: false,
+  enableVoiceChat: true,
+  enableTextChat: true,
+  requireVoteForCompilation: false,
+  maxUsers: 10,
+  description: "",
+  allowedUsers: []
+};
+
 // Компонент комнаты с основной логикой
-function Room({ userData }: { userData: UserData }) {
+function Room({ userData, roomSettings }: { userData: UserData; roomSettings: RoomSettings }) {
   const params = useParams();
   const router = useRouter();
   const others = useOthers();
   const files = useStorage((root) => root.files);
-  // Получаем ID комнаты из параметров URL
-  const roomId = params?.roomId
-    ? Array.isArray(params.roomId)
-      ? params.roomId[0]
-      : params.roomId
-    : null;
-
-  const roomSettings = useStorage((root) => root.roomSettings);
+  const roomId = Array.isArray(params.roomId) ? params.roomId[0] : params.roomId;
 
   // Создание начального файла при входе первого пользователя
-  const createInitialFiles = useMutation(
-    ({ storage }) => {
-      if (!storage.get("files") || storage.get("files").size === 0) {
-        const initialFiles = new LiveMap<string, StorageFile>();
-        initialFiles.set("welcome.md", {
-          content:
-            "# Welcome to the Code Editor\nStart by creating or opening a file!",
-          type: "file",
-          language: "markdown",
-          lastEditedBy: userData.username,
-          lastEditedAt: Date.now(),
+  const createInitialFile = useMutation(({ storage }) => {
+    const currentFiles = storage.get("files") as LiveMap<string, StorageFile>;
+    if (currentFiles && currentFiles.size === 0) {
+        currentFiles.set("welcome.md", {
+            content: `# Добро пожаловать в CodeSync!\n\nЭто редактор для совместной работы. \nНачните с создания или открытия файла на боковой панели.`,
+            type: "file",
+            language: "markdown",
+            lastEditedBy: userData.username,
+            lastEditedAt: Date.now(),
         });
-        storage.set("files", initialFiles);
-      }
-    },
-    [userData.username]
-  );
+    }
+  }, [userData.username]);
+
 
   // Инициализация файлов при входе первого пользователя
   useEffect(() => {
-    if (others.length === 0 && files) {
-      if (!files || files.size === 0) {
-        createInitialFiles();
-      }
+    if (others.length === 0 && files?.size === 0) {
+        createInitialFile();
     }
-  }, [others, files, createInitialFiles]);
+  }, [others.length, files, createInitialFile]);
+
+  if (!roomId) {
+    return <div>Room not found...</div>;
+  }
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-screen flex flex-col bg-background">
       <Navbar
-        roomId={roomId!}
+        roomId={roomId}
         username={userData.username}
         isPrivate={roomSettings?.isPrivate || false}
         onNewRoom={() => {
-          const newRoomId = `room-${Date.now()}`;
-          router.push(`/rooms/${newRoomId}`);
+          router.push(`/`);
         }}
         onLeave={() => {
           localStorage.removeItem("userData");
           router.push("/");
         }}
       />
-      <div className="flex-1 relative">
-        <Editor username={userData.username} roomId={roomId!} />
+      <div className="flex-1 relative overflow-hidden">
+        <Editor username={userData.username} roomId={roomId} />
       </div>
     </div>
   );
@@ -88,29 +81,21 @@ export default function RoomPage() {
   const [isLoading, setIsLoading] = useState(true);
   const params = useParams();
   const router = useRouter();
-  const roomId = params?.roomId
-    ? Array.isArray(params.roomId)
-      ? params.roomId[0]
-      : params.roomId
-    : null;
+  const roomId = Array.isArray(params.roomId) ? params.roomId[0] : params.roomId;
 
   // Загрузка данных пользователя из localStorage
   useEffect(() => {
     const savedUserData = localStorage.getItem("userData");
     if (savedUserData) {
       setUserData(JSON.parse(savedUserData));
+    } else {
+      router.push("/");
     }
     setIsLoading(false);
-  }, []);
+  }, [router]);
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
-
-  // Редирект на главную если нет данных
-  if (!userData || !roomId) {
-    router.push("/");
-    return null;
+  if (isLoading || !userData || !roomId) {
+    return <div className="h-screen w-full flex items-center justify-center bg-background text-foreground">Загрузка...</div>;
   }
 
   // Инициализация провайдера Liveblocks с начальными данными
@@ -119,30 +104,32 @@ export default function RoomPage() {
       id={roomId}
       initialPresence={{
         cursor: null,
+        selection: null,
         selectedFile: null,
         username: userData.username,
         avatar: userData.avatar,
-        info: userData.info,
-        cursorStyle: "default",
         isTyping: false,
         isSpeaking: false,
-        reactions: [],
       }}
       initialStorage={{
-        files: new LiveMap(),
-        roomSettings: new LiveObject({
-          roomName: "Default Room",
-          isPrivate: false,
-          enableVoiceChat: true,
-          enableTextChat: true,
-          requireVoteForCompilation: false,
-          maxUsers: 10,
-        }),
+        files: new LiveMap<string, StorageFile>(),
+        roomSettings: new LiveObject<RoomSettings>(defaultRoomSettings),
         messages: new LiveMap(),
         compilationVotes: new LiveMap(),
       }}
     >
-      <Room userData={userData} />
+      <RoomContent userData={userData} />
     </RoomProvider>
   );
+}
+
+function RoomContent({ userData }: { userData: UserData }) {
+    // FIX: Правильное получение объекта настроек из useStorage
+    const roomSettings = useStorage(root => root.roomSettings);
+
+    if(!roomSettings) {
+        return <div className="h-screen w-full flex items-center justify-center bg-background text-foreground">Загрузка настроек комнаты...</div>;
+    }
+
+    return <Room userData={userData} roomSettings={roomSettings} />
 }
